@@ -1,12 +1,28 @@
 import numpy as np
+import scipy as sp
 
 class hyperdual2:
     order = 2
     def __init__(self,a:float,b:float=0,c:float=0,d:float=0):
         self.a = a
-        self.b = b
-        self.c = c
-        self.d = d
+        if isinstance(a,np.matrix):
+            sh = a.shape
+            if not isinstance(b,np.matrix):
+                self.b = np.zeros(sh)
+            else:
+                self.b = b
+            if not isinstance(c,np.matrix):
+                self.c = np.zeros(sh)
+            else:
+                self.c = c
+            if not isinstance(d,np.matrix):
+                self.d = np.zeros(sh)
+            else:
+                self.d = d
+        else:
+            self.b = b
+            self.c = c
+            self.d = d
 
     def __repr__(self): # Print statement
         return f'{self.a} + {self.b} \u03B5_1 + {self.c} \u03B5_2 + {self.d} \u03B5_1 \u03B5_2'
@@ -104,10 +120,56 @@ class hyperdual2:
         return A
     def get_vector(self): # returns a vector representation
         try: # matrix
-            a=self.a.shape
             A = np.concatenate((self.a,self.b,self.c,self.d))
         except: # scalar
             A = np.matrix([[self.a],[self.b],[self.c],[self.d]])
         return A
     def norm(self):
         return np.sqrt(self.a**2)
+    # Static methods
+    @staticmethod
+    def real_eigs(K:np.matrix,M:np.matrix):
+        lamb,phi = sp.linalg.eig(K,M)
+        phi,lamb = np.matrix(phi), np.real(lamb) # Real values of eigenvalues only
+        # Mass normalize mode shapes
+        a = np.diag(phi.T*M*phi)
+        phi_n = phi/np.sqrt(a)
+        return lamb,phi_n
+    @staticmethod
+    def eigs(x,y):
+        if not isinstance(x,hyperdual2):
+            x = hyperdual2(x)
+        if not isinstance(y,hyperdual2):
+            y = hyperdual2(y)
+        # Get real value eigenvalues/eigenvectors
+        lamb,phi = hyperdual2.real_eigs(x.a,y.a)
+        nm,sha = len(lamb), phi.shape
+        i1,i2,i3 = np.zeros(nm),np.zeros(nm),np.zeros(nm)
+        phi_1,phi_2,phi_3 = np.matrix(np.zeros(sha)),np.matrix(np.zeros(sha)),np.matrix(np.zeros(sha))
+        # Loop through modes
+        for i in range(nm):
+            # Some constants
+            Finv = np.linalg.inv(x.a-lamb[i]*y.a)
+            # First Derivative Eigenvalue
+            i1[i] = phi[:,i].T * (x.b-lamb[i]*y.b) * phi[:,i]
+            i2[i] = phi[:,i].T * (x.c-lamb[i]*y.c) * phi[:,i]
+            # First Derivative Eigenvector
+            df1 = x.b - i1[i] * y.a - lamb[i] * y.b
+            df2 = x.c - i2[i] * y.a - lamb[i] * y.c
+            z1 = -Finv * df1 * phi[:,i]
+            z2 = -Finv * df2 * phi[:,i]
+            c1 = float(-0.5 * phi[:,i].T * y.b * phi[:,i] - phi[:,i].T * y.a * z1)
+            c2 = float(-0.5 * phi[:,i].T * y.c * phi[:,i] - phi[:,i].T * y.a * z2)
+            phi_1[:,i] = z1 + c1 * phi[:,i]
+            phi_2[:,i] = z2 + c2 * phi[:,i]
+            # Second Derivative Eigenvalue
+            i3[i] = phi[:,i].T * (x.d - i1[i] * y.c - i2[i] * y.b - lamb[i] * y.d) * phi[:,i] + phi[:,i].T * (df1 * phi_2[:,i] + df2 * phi_1[:,i])
+            # Second Derivative Eigenvector
+            df3 = x.d - i3[i] * y.a - i1[i] * y.c - i2[i] * y.b - lamb[i] * y.d
+            z3 = -Finv * (df3 * phi[:,i] + df1 * phi_2[:,i] + df2 * phi_1[:,i])
+            c3 = float(-phi[:,i].T * (0.5 * y.d * phi[:,i] + y.b * phi_2[:,i] + y.c * phi_1[:,i] + y.a * z3) - phi_2[:,i].T * y.a * phi_1[:,i])
+            phi_3[:,i] = z3 + c3 * phi[:,i]
+        # Assemble hyperdual objects
+        lamb_hd = hyperdual2(lamb,i1,i2,i3)
+        phi_hd = hyperdual2(phi,phi_1,phi_2,phi_3)
+        return lamb_hd, phi_hd
