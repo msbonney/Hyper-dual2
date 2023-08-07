@@ -136,11 +136,15 @@ class hyperdual2:
         phi_n = phi/np.sqrt(a)
         return lamb,phi_n
     @staticmethod
-    def eigs(x,y):
-        if not isinstance(x,hyperdual2):
-            x = hyperdual2(x)
-        if not isinstance(y,hyperdual2):
-            y = hyperdual2(y)
+    def eigs(K,M):
+        if not isinstance(K,hyperdual2):
+            x = hyperdual2(K)
+        else:
+            x = K
+        if not isinstance(M,hyperdual2):
+            y = hyperdual2(M)
+        else:
+            y = M
         # Get real value eigenvalues/eigenvectors
         lamb,phi = hyperdual2.real_eigs(x.a,y.a)
         nm,sha = len(lamb), phi.shape
@@ -172,4 +176,4 @@ class hyperdual2:
         # Assemble hyperdual objects
         lamb_hd = hyperdual2(lamb,i1,i2,i3)
         phi_hd = hyperdual2(phi,phi_1,phi_2,phi_3)
-        return lamb_hd, phi_hd
+        return lamb_hd, phi_hd 
